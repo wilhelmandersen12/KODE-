@@ -1,0 +1,262 @@
+import csv
+from datetime import datetime
+import matplotlib.pyplot as plt
+
+
+# --------------------------------------------------
+# DEL 1 - LESE FIL OG PLOTTE DATA
+# --------------------------------------------------
+
+def les_data(filnavn):
+    data = []
+
+    with open(filnavn, "r", encoding="utf-8-sig") as fil:
+        leser = csv.reader(fil, delimiter=";")
+
+        # Hopper over første linje med kolonnenavn
+        next(leser)
+
+        hoyeste_dato = None
+
+        for rad in leser:
+
+            # Sjekker at raden har nok kolonner
+            if len(rad) < 8:
+                continue
+
+            try:
+                dato = datetime.strptime(rad[2], "%d.%m.%Y")
+            except ValueError:
+                continue
+
+            # Frivillig tilleggsoppgave:
+            # Forkaster datoer som kommer i feil rekkefølge
+            if hoyeste_dato != None:
+                if dato <= hoyeste_dato:
+                    continue
+
+            hoyeste_dato = dato
+
+            # Gjør om tekst til tall.
+            # Manglende verdier ("-") blir None.
+            maks_temp = til_tall(rad[3])
+            middel_temp = til_tall(rad[4])
+            nedbor = til_tall(rad[5])
+            vind = til_tall(rad[6])
+            snodybde = til_tall(rad[7])
+
+            data.append({
+                "dato": dato,
+                "maks_temp": maks_temp,
+                "middel_temp": middel_temp,
+                "nedbor": nedbor,
+                "vind": vind,
+                "snodybde": snodybde
+            })
+
+    return data
+
+
+def til_tall(verdi):
+    if verdi == "-":
+        return None
+
+    try:
+        return float(verdi.replace(",", "."))
+    except ValueError:
+        return None
+
+
+def plott_data(data, aar):
+    datoer = []
+    snodybde = []
+    nedbor = []
+    temperatur = []
+    vind = []
+
+    for dag in data:
+        if dag["dato"].year == aar:
+            datoer.append(dag["dato"])
+            snodybde.append(dag["snodybde"])
+            nedbor.append(dag["nedbor"])
+            temperatur.append(dag["middel_temp"])
+            vind.append(dag["vind"])
+
+    if len(datoer) == 0:
+        print("Fant ingen data for dette året.")
+        return
+
+    plt.figure(figsize=(12, 10))
+
+    plt.subplot(4, 1, 1)
+    plt.plot(datoer, snodybde)
+    plt.ylabel("Snødybde (cm)")
+    plt.title("Værdata for " + str(aar))
+
+    plt.subplot(4, 1, 2)
+    plt.plot(datoer, nedbor)
+    plt.ylabel("Nedbør (mm)")
+
+    plt.subplot(4, 1, 3)
+    plt.plot(datoer, temperatur)
+    plt.ylabel("Temperatur (°C)")
+
+    plt.subplot(4, 1, 4)
+    plt.plot(datoer, vind)
+    plt.ylabel("Vind (m/s)")
+    plt.xlabel("Dato")
+
+    plt.tight_layout()
+    plt.show()
+
+
+# --------------------------------------------------
+# DEL 2 - SKIFØRE OG PLANTEVEKST
+# --------------------------------------------------
+
+def skifore(data, aar):
+    antall_dager = 0
+
+    for dag in data:
+        dato = dag["dato"]
+        snodybde = dag["snodybde"]
+
+        # Skisesongen går fra november året før
+        # til og med mai dette året
+        riktig_dato = (
+            (dato.year == aar - 1 and dato.month >= 11)
+            or
+            (dato.year == aar and dato.month <= 5)
+        )
+
+        if riktig_dato:
+            if snodybde != None and snodybde >= 20:
+                antall_dager += 1
+
+    return antall_dager
+
+
+def plantevekst(data, aar):
+    total_vekst = 0
+
+    for dag in data:
+        if dag["dato"].year == aar:
+
+            temperatur = dag["middel_temp"]
+
+            if temperatur != None and temperatur > 5:
+                vekst = temperatur - 5
+                total_vekst += vekst
+
+    return total_vekst
+
+
+# --------------------------------------------------
+# DEL 3 - TØRKEPERIODE OG SOMMERDAGER
+# --------------------------------------------------
+
+def lengste_periode_uten_nedbor(data, aar):
+    lengste = 0
+    teller = 0
+
+    startdato = None
+    sluttdato = None
+    midlertidig_start = None
+
+    for dag in data:
+
+        if dag["dato"].year == aar:
+
+            if dag["nedbor"] == 0:
+
+                if teller == 0:
+                    midlertidig_start = dag["dato"]
+
+                teller += 1
+
+                if teller > lengste:
+                    lengste = teller
+                    startdato = midlertidig_start
+                    sluttdato = dag["dato"]
+
+            else:
+                teller = 0
+                midlertidig_start = None
+
+    return lengste, startdato, sluttdato
+
+
+def sommerdager(data, aar):
+    sommerdager = 0
+    hoysommerdager = 0
+    tropedager = 0
+
+    for dag in data:
+
+        if dag["dato"].year == aar:
+
+            maks_temp = dag["maks_temp"]
+
+            if maks_temp != None:
+
+                if maks_temp > 20:
+                    sommerdager += 1
+
+                if maks_temp > 25:
+                    hoysommerdager += 1
+
+                if maks_temp > 30:
+                    tropedager += 1
+
+    return sommerdager, hoysommerdager, tropedager
+
+
+# --------------------------------------------------
+# HOVEDPROGRAM
+# --------------------------------------------------
+
+def main():
+
+    filnavn = "sinnes_2014_2025_med_makstemperatur.csv"
+
+    data = les_data(filnavn)
+
+    print("Værdata fra Sinnes")
+    print("-------------------")
+
+    try:
+        aar = int(input("Skriv inn et år: "))
+    except ValueError:
+        print("Du må skrive inn et gyldig år.")
+        return
+
+    # Oppgave d
+    plott_data(data, aar)
+
+    # Oppgave e
+    antall_skidager = skifore(data, aar)
+    print("\nAntall dager med skiføre:", antall_skidager)
+
+    # Oppgave f
+    vekst = plantevekst(data, aar)
+    print("Total plantevekst:", round(vekst, 1))
+
+    # Oppgave g
+    lengde, start, slutt = lengste_periode_uten_nedbor(data, aar)
+
+    if start != None:
+        print("Lengste periode uten nedbør:", lengde, "dager")
+        print("Startdato:", start.strftime("%d.%m.%Y"))
+        print("Sluttdato:", slutt.strftime("%d.%m.%Y"))
+    else:
+        print("Fant ingen periode uten nedbør.")
+
+    # Oppgave h
+    sommer, hoysommer, trope = sommerdager(data, aar)
+
+    print("Antall sommerdager:", sommer)
+    print("Antall høysommerdager:", hoysommer)
+    print("Antall tropedager:", trope)
+
+
+main()
